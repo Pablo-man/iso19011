@@ -20,7 +20,7 @@ genai.configure(api_key=GOOGLE_API_KEY)
 modelo = genai.GenerativeModel("gemini-2.0-flash-exp")
 
 # Ruta al documento Word de la ISO
-ruta_docx = os.getenv("ISO_DOC_PATH", "ISO19011.docx")
+ruta_docx = os.getenv("ISO_DOC_PATH", "iso-45001-norma-Internacional.docx")
 
 def leer_docx(ruta):
     """Lee el contenido de un documento Word"""
@@ -140,7 +140,11 @@ def generar_solucion(caso):
 def comparar_respuestas(respuesta_usuario, caso):
     """Compara la respuesta del usuario con la solución generada por la IA"""
     if not caso or not solucion_actual:
-        return "Error: No hay un caso de estudio o solución generada para comparar."
+        # Asegurarse de devolver tanto el texto de error como un gráfico vacío
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, "No hay datos para comparar", ha='center', va='center', fontsize=14)
+        ax.set_axis_off()
+        return "Error: No hay un caso de estudio o solución generada para comparar.", fig
     
     prompt = f"""
     Basándote en la siguiente norma ISO:
@@ -192,7 +196,11 @@ def comparar_respuestas(respuesta_usuario, caso):
         
         return resultado_comparacion, fig
     except Exception as e:
-        return f"Error al comparar las respuestas: {str(e)}", None
+        # Asegurarse de devolver tanto el mensaje de error como un gráfico vacío
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, f"Error: {str(e)}", ha='center', va='center', fontsize=14)
+        ax.set_axis_off()
+        return f"Error al comparar las respuestas: {str(e)}", fig
 
 def generar_recomendaciones(respuesta_usuario, resultado_comparacion, caso):
     """Genera recomendaciones para la mejora continua"""
@@ -279,12 +287,11 @@ def generar_archivo_txt(texto, prefijo):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{prefijo}_{timestamp}.txt"
     
-    # Crear un objeto de archivo en memoria
-    buffer = io.BytesIO()
-    buffer.write(texto.encode('utf-8'))
-    buffer.seek(0)
+    # Guardar en el disco en lugar de memoria
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(texto)
     
-    return (filename, buffer)
+    return filename
 
 def generar_archivo_docx(texto, prefijo):
     """Genera un archivo DOCX a partir del texto"""
@@ -305,12 +312,10 @@ def generar_archivo_docx(texto, prefijo):
     # Añadir el texto
     doc.add_paragraph(texto)
     
-    # Guardar en memoria
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
+    # Guardar en disco en lugar de memoria
+    doc.save(filename)
     
-    return (filename, buffer)
+    return filename
 
 def generar_pdf(texto, prefijo):
     """Placeholder para generación de PDF (requiere librería adicional)"""
@@ -329,40 +334,58 @@ def actualizar_chat(mensaje, historial=None):
 
 # Configuración de la interfaz Gradio
 with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
-    gr.Markdown("# Sistema de Casos de Estudio ISO 19011")
-    gr.Markdown("Esta aplicación genera casos de estudio basados en normas ISO 10911, permite planificar su resolución, evaluar respuestas y proporcionar recomendaciones para la mejora continua.")
+    gr.Markdown("# Sistema de Casos de Estudio ISO")
+    gr.Markdown("Esta aplicación genera casos de estudio basados en normas ISO, permite planificar su resolución, evaluar respuestas y proporcionar recomendaciones para la mejora continua.")
     
     with gr.Tab("Generador de Casos de Estudio"):
         with gr.Row():
             with gr.Column(scale=3):
                 caso_btn = gr.Button("Generar Caso de Estudio", variant="primary")
-                caso_output = gr.Textbox(
+                caso_output = gr.Markdown(
                     label="Caso de Estudio", 
-                    placeholder="El caso de estudio aparecerá aquí...",
-                    lines=15
+                    value="El caso de estudio aparecerá aquí..."
                 )
             
             with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### Descargar Caso")
-                    download_caso_txt = gr.File(label="Descargar como TXT")
-                    download_caso_docx = gr.File(label="Descargar como DOCX")
+                    download_caso_txt = gr.File(label="TXT", type="filepath")
+                    download_caso_docx = gr.File(label="DOCX", type="filepath")
+                    gr.Button("Descargar como TXT", elem_id="btn_caso_txt").click(
+                        fn=lambda texto: generar_archivo_txt(texto, "caso_estudio"),
+                        inputs=caso_output,
+                        outputs=download_caso_txt
+                    )
+                    gr.Button("Descargar como DOCX", elem_id="btn_caso_docx").click(
+                        fn=lambda texto: generar_archivo_docx(texto, "caso_estudio"),
+                        inputs=caso_output,
+                        outputs=download_caso_docx
+                    )
     
     with gr.Tab("Planificación"):
         with gr.Row():
             with gr.Column(scale=3):
                 plan_btn = gr.Button("Crear Planificación", variant="primary")
-                plan_output = gr.Textbox(
+                plan_output = gr.Markdown(
                     label="Planificación", 
-                    placeholder="La planificación aparecerá aquí...",
-                    lines=15
+                    value="La planificación aparecerá aquí..."
                 )
             
             with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### Descargar Planificación")
-                    download_plan_txt = gr.File(label="Descargar como TXT")
-                    download_plan_docx = gr.File(label="Descargar como DOCX")
+                    download_plan_txt = gr.File(label="TXT", type="filepath")
+                    download_plan_docx = gr.File(label="DOCX", type="filepath")
+                    gr.Button("Descargar como TXT", elem_id="btn_plan_txt").click(
+                        fn=lambda texto: generar_archivo_txt(texto, "planificacion"),
+                        inputs=plan_output,
+                        outputs=download_plan_txt
+                    )
+                    gr.Button("Descargar como DOCX", elem_id="btn_plan_docx").click(
+                        fn=lambda texto: generar_archivo_docx(texto, "planificacion"),
+                        inputs=plan_output,
+                        outputs=download_plan_docx
+                    )
     
     with gr.Tab("Evaluación de Respuesta"):
         with gr.Row():
@@ -373,10 +396,9 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
             )
             solucion_btn = gr.Button("Ver Solución de Referencia", variant="secondary")
         
-        solucion_output = gr.Textbox(
+        solucion_output = gr.Markdown(
             label="Solución de Referencia", 
-            placeholder="La solución de referencia aparecerá aquí...",
-            lines=10,
+            value="La solución de referencia aparecerá aquí...",
             visible=False
         )
         
@@ -384,10 +406,9 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
         
         with gr.Row():
             with gr.Column(scale=2):
-                resultado_comparacion = gr.Textbox(
+                resultado_comparacion = gr.Markdown(
                     label="Resultado de la Comparación", 
-                    placeholder="El resultado de la comparación aparecerá aquí...",
-                    lines=10
+                    value="El resultado de la comparación aparecerá aquí..."
                 )
             
             with gr.Column(scale=1):
@@ -397,23 +418,42 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
             with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### Descargar Resolución")
-                    download_sol_txt = gr.File(label="Descargar como TXT")
-                    download_sol_docx = gr.File(label="Descargar como DOCX")
+                    download_sol_txt = gr.File(label="TXT", type="filepath")
+                    download_sol_docx = gr.File(label="DOCX", type="filepath")
+                    gr.Button("Descargar como TXT", elem_id="btn_sol_txt").click(
+                        fn=lambda texto: generar_archivo_txt(texto, "solucion"),
+                        inputs=solucion_output,
+                        outputs=download_sol_txt
+                    )
+                    gr.Button("Descargar como DOCX", elem_id="btn_sol_docx").click(
+                        fn=lambda texto: generar_archivo_docx(texto, "solucion"),
+                        inputs=solucion_output,
+                        outputs=download_sol_docx
+                    )
     
     with gr.Tab("Recomendaciones"):
         recom_btn = gr.Button("Generar Recomendaciones", variant="primary")
-        recom_output = gr.Textbox(
+        recom_output = gr.Markdown(
             label="Recomendaciones para Mejora Continua", 
-            placeholder="Las recomendaciones aparecerán aquí...",
-            lines=15
+            value="Las recomendaciones aparecerán aquí..."
         )
         
         with gr.Row():
             with gr.Column(scale=1):
                 with gr.Group():
                     gr.Markdown("### Descargar Recomendaciones")
-                    download_recom_txt = gr.File(label="Descargar como TXT")
-                    download_recom_docx = gr.File(label="Descargar como DOCX")
+                    download_recom_txt = gr.File(label="TXT", type="filepath")
+                    download_recom_docx = gr.File(label="DOCX", type="filepath")
+                    gr.Button("Descargar como TXT", elem_id="btn_recom_txt").click(
+                        fn=lambda texto: generar_archivo_txt(texto, "recomendaciones"),
+                        inputs=recom_output,
+                        outputs=download_recom_txt
+                    )
+                    gr.Button("Descargar como DOCX", elem_id="btn_recom_docx").click(
+                        fn=lambda texto: generar_archivo_docx(texto, "recomendaciones"),
+                        inputs=recom_output,
+                        outputs=download_recom_docx
+                    )
     
     # Eventos
     caso_btn.click(
@@ -449,46 +489,8 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="blue")) as demo:
         outputs=recom_output
     )
     
-    # Eventos para descargar archivos
-    caso_output.change(
-        fn=lambda texto: generar_archivo_txt(texto, "caso_estudio"),
-        inputs=caso_output,
-        outputs=download_caso_txt
-    ).then(
-        fn=lambda texto: generar_archivo_docx(texto, "caso_estudio"),
-        inputs=caso_output,
-        outputs=download_caso_docx
-    )
-    
-    plan_output.change(
-        fn=lambda texto: generar_archivo_txt(texto, "planificacion"),
-        inputs=plan_output,
-        outputs=download_plan_txt
-    ).then(
-        fn=lambda texto: generar_archivo_docx(texto, "planificacion"),
-        inputs=plan_output,
-        outputs=download_plan_docx
-    )
-    
-    solucion_output.change(
-        fn=lambda texto: generar_archivo_txt(texto, "solucion"),
-        inputs=solucion_output,
-        outputs=download_sol_txt
-    ).then(
-        fn=lambda texto: generar_archivo_docx(texto, "solucion"),
-        inputs=solucion_output,
-        outputs=download_sol_docx
-    )
-    
-    recom_output.change(
-        fn=lambda texto: generar_archivo_txt(texto, "recomendaciones"),
-        inputs=recom_output,
-        outputs=download_recom_txt
-    ).then(
-        fn=lambda texto: generar_archivo_docx(texto, "recomendaciones"),
-        inputs=recom_output,
-        outputs=download_recom_docx
-    )
+    # Eliminar botones redundantes ya que ahora tenemos botones específicos en cada sección
+    # Los botones de descarga ya están configurados en cada sección
 
 # Iniciar la aplicación
 if __name__ == "__main__":
